@@ -14,7 +14,7 @@ interface Env {
 }
 
 // --- WORKERS AI FREE LLM CONFIG ---
-const GENERATION_MODEL = '@cf/meta/llama-3.1-8b-instruct'; 
+const GENERATION_MODEL = '@cf/mistral/mistral-7b-instruct-v0.2'; 
 const EMBEDDING_MODEL = '@cf/baai/bge-small-en-v1.5';
 
 // --- Helper: Creates the ZIP file buffer ---
