@@ -2,12 +2,19 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "wp-ai-generator",
 	"main": "src/index.ts",
-	"compatibility_date": "2025-10-04",
+	"compatibility_date": "2025-10-07", // Updated to reflect current date best practice
 	"observability": {
 		"enabled": true
 	},
 
-	// --- BINDINGS: Cloudflare Resources for the AI Assistant ---
+	// --- STATIC ASSETS CONFIGURATION (NEW) ---
+	"assets": {
+		"directory": "./public", // Points to your frontend files
+		"binding": "ASSETS"      // Defines the binding name used in src/index.ts
+	},
+	// ------------------------------------------
+
+	// --- BINDINGS: Cloudflare Resources ---
 	
 	"r2_buckets": [
 		{
@@ -26,7 +33,4 @@
 	"ai": {
 		"binding": "AI"
 	}
-	
-	// Note: The Anthropic API key is stored separately using 'wrangler secret put ANTHROPIC_API_KEY'
-	// The AI Gateway ID is used directly in the Worker's fetch() URL.
 }

@@ -1,151 +1,65 @@
-// D:\cloudflare_worker_app\wp-ai-generator\src\index.ts
+// D:\cloudflare_worker_app\wp-ai-generator\public\app.js
 
-import { JSZip } from 'jszip'; 
-import { WP_DOCS } from './wp_docs_content.js'; // Assumes you created this file
+// IMPORTANT: The URL MUST BE YOUR DEPLOYED URL!
+const WORKER_URL = '[https://wp-ai-generator.saoud-panizai.workers.dev](https://wp-ai-generator.saoud-panizai.workers.dev)'; 
 
-// --- BINDING INTERFACE (Matches your wrangler.jsonc bindings) ---
-interface Env {
-  AI: any; // Workers AI binding
-  WP_INDEX: VectorizeIndex; // Vectorize binding
-  PLUGIN_STORAGE: R2Bucket; // R2 binding
+const form = document.getElementById('generator-form');
+const promptInput = document.getElementById('prompt-input');
+const statusMessage = document.getElementById('status-message');
+const codeOutput = document.getElementById('code-output');
+const downloadLink = document.getElementById('download-link');
+const generateButton = document.getElementById('generate-button');
+
+if (form) {
+    form.addEventListener('submit', handleGenerate);
 }
 
-// --- WORKERS AI FREE LLM CONFIG ---
-const GENERATION_MODEL = '@cf/meta/llama-3.1-8b-instruct'; 
-const EMBEDDING_MODEL = '@cf/baai/bge-small-en-v1.5';
-
-// --- Helper: Creates the ZIP file buffer ---
-async function createZipBuffer(fileName: string, content: string): Promise<ArrayBuffer> {
-    const zip = new JSZip();
-    // Adds the core PHP file to the zip archive
-    zip.file(fileName, content); 
+async function handleGenerate(event) {
+    event.preventDefault(); 
     
-    return zip.generateAsync({ type: "arraybuffer" });
-}
+    const prompt = promptInput.value.trim();
+    if (!prompt) return;
 
-// --- TEMPORARY INGESTION FUNCTION (Run once to setup RAG) ---
-async function ingestData(env: Env): Promise<Response> {
-  const vectors = [];
-  
-  for (let i = 0; i < WP_DOCS.length; i++) {
-    const chunk = WP_DOCS[i];
-    
-    // 1. Generate Embedding using Workers AI (Free Tier)
-    const embeddingResponse = await env.AI.run(EMBEDDING_MODEL, { text: chunk });
-    const embedding = embeddingResponse.data[0];
+    // --- State: Loading ---
+    statusMessage.textContent = 'Generating... Calling Workers AI...';
+    statusMessage.className = 'status loading';
+    generateButton.disabled = true;
+    codeOutput.style.display = 'none';
+    downloadLink.style.display = 'none';
+    codeOutput.textContent = ''; 
 
-    vectors.push({
-      id: `doc-${i}`,
-      values: embedding,
-      metadata: { text: chunk }
-    });
-  }
-
-  // 2. Insert into Vectorize Index 
-  await env.WP_INDEX.upsert(vectors);
-
-  return new Response(JSON.stringify({ 
-      message: `Successfully ingested ${vectors.length} vectors into Vectorize. THIS IS SETUP ONLY.` 
-  }), { status: 200 });
-}
-
-
-// --- MAIN API HANDLER (For Frontend POST requests) ---
-async function handleGenerate(request: Request, env: Env): Promise<Response> {
-    if (request.method !== 'POST') {
-      return new Response(JSON.stringify({ error: "Method Not Allowed. Use POST." }), { status: 405 });
-    }
-    
     try {
-      const { prompt } = await request.json();
-      if (!prompt) {
-        return new Response(JSON.stringify({ error: "Missing 'prompt' in request body." }), { status: 400 });
-      }
+        // --- Core Fetch Request (POST) ---
+        const response = await fetch(WORKER_URL, { 
+            method: 'POST', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ prompt: prompt }),
+        });
 
-      // 1. RAG Retrieval (Context Lookup)
-      const queryEmbeddingResponse = await env.AI.run(EMBEDDING_MODEL, { text: prompt });
-      const searchResults = await env.WP_INDEX.query(queryEmbeddingResponse.data[0], { topK: 3 });
-      const context = searchResults.matches.map(match => match.metadata.text).join('\n---\n');
+        const data = await response.json();
 
-      // 2. Define System Prompt and Generate Code
-      const systemPrompt = `You are a world-class WordPress PHP developer. Your goal is to write a single, complete, secure PHP file for a plugin. Use the following CONTEXT: ${context}. Respond with ONLY the raw PHP code, starting with '<?php' and the required plugin header comment block. Do not include any explanation or markdown formatting.`;
+        if (!response.ok || data.error) {
+            throw new Error(data.error || data.message || `API returned status: ${response.status}`);
+        }
 
-      const aiResponse = await env.AI.run(GENERATION_MODEL, {
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Generate a plugin that: ${prompt}` }
-        ]
-      });
+        // --- State: Success ---
+        statusMessage.textContent = '✅ Plugin code generated successfully!';
+        statusMessage.className = 'status success';
+        
+        codeOutput.textContent = data.code;
+        codeOutput.style.display = 'block';
 
-      // Simple cleanup for the output code
-      let generatedCode = aiResponse.response.trim();
-      if (generatedCode.startsWith('```php')) {
-        generatedCode = generatedCode.replace('```php', '').replace('```', '').trim();
-      }
-      
-      if (!generatedCode || generatedCode.length < 50) {
-        throw new Error("AI returned no code or an excessively short response.");
-      }
+        // Set the download link using the URL provided by the worker
+        downloadLink.href = WORKER_URL + data.downloadUrl; 
+        downloadLink.style.display = 'block';
 
-      // 3. Package and Store in R2 (Local Simulation)
-      const sanitizedName = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 30);
-      const zipFileName = `wp-plugin-${sanitizedName}.zip`;
-      const phpFileName = `${sanitizedName}.php`;
-
-      const zipBuffer = await createZipBuffer(phpFileName, generatedCode);
-      await env.PLUGIN_STORAGE.put(zipFileName, zipBuffer); 
-      
-      // The download URL routes back to the Worker to fetch the file from R2
-      const downloadUrl = `/download/${zipFileName}`; 
-
-      // 4. Return Success Response (Used by public/app.js)
-      return new Response(JSON.stringify({ 
-        success: true,
-        code: generatedCode, // Return code for display/debugging
-        downloadUrl: downloadUrl,
-      }), {
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    } catch (e) {
-      console.error(e);
-      return new Response(JSON.stringify({ 
-          error: `AI or RAG process failed: ${e.message}`,
-          message: `Check Wrangler terminal logs for details.`
-      }), { status: 500 });
+    } catch (error) {
+        // --- State: Error ---
+        statusMessage.textContent = `❌ Generation Failed. Error: ${error.message}`;
+        statusMessage.className = 'status error';
+        codeOutput.style.display = 'block';
+        codeOutput.textContent = `Check live Worker logs for backend issues.`;
+    } finally {
+        generateButton.disabled = false;
     }
 }
-
-
-// --- EXPORTED HANDLER (Routes traffic) ---
-export default {
-  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    const url = new URL(request.url);
-
-    // 1. Ingestion Route (SETUP ONLY)
-    if (url.pathname === '/ingest' && request.method === 'GET') {
-      return ingestData(env);
-    }
-    
-    // 2. Download Route (R2 Retrieval)
-    if (url.pathname.startsWith('/download/')) {
-        const fileName = url.pathname.substring('/download/'.length);
-        const object = await env.PLUGIN_STORAGE.get(fileName);
-        
-        if (object === null) {
-            return new Response('Plugin not found.', { status: 404 });
-        }
-        
-        return new Response(object.body, {
-            headers: {
-                'Content-Type': 'application/zip',
-                'Content-Disposition': `attachment; filename="${fileName}"`
-            }
-        });
-    }
-
-    // 3. Main API Route (Handles Frontend POST)
-    // If it's a request that isn't the two routes above, it's assumed to be the main API call.
-    return handleGenerate(request, env);
-  }
-};
