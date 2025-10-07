@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WP Plugin AI Generator MVP</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <h1>WordPress Plugin Generator AI 🤖</h1>
+        <p>Describe the plugin you need. Runs on Cloudflare Free Tier services (Workers AI, Vectorize, R2).</p>
+        
+        <form id="generator-form">
+            <textarea 
+                id="prompt-input"
+                placeholder="E.g., Create a secure WooCommerce add-on that restricts product purchases to users in the 'Wholesale' role."
+                rows="6"
+                required
+            ></textarea>
+            <button type="submit" id="generate-button">Generate Plugin Code</button>
+        </form>
+
+        <div id="status-message" class="status"></div>
+        
+        <div id="result-area">
+            <h3>Generated Code:</h3>
+            
+            <a id="download-link" style="display:none;" target="_blank" download="custom-plugin.zip">
+                <button>Download Plugin ZIP</button>
+            </a>
+            
+            <pre id="code-output" style="display:none;"></pre>
+        </div>
+    </div>
+
+    <script src="app.js"></script> 
+</body>
+</html>

@@ -1,15 +1,13 @@
 // D:\cloudflare_worker_app\wp-ai-generator\src\index.ts
 
-// NOTE: You must have run 'npm install jszip' previously.
 import { JSZip } from 'jszip'; 
-// NOTE: You must have created src/wp_docs_content.js with the WP_DOCS array.
-import { WP_DOCS } from './wp_docs_content.js'; 
+import { WP_DOCS } from './wp_docs_content.js'; // Assumes you created this file
 
 // --- BINDING INTERFACE (Matches your wrangler.jsonc bindings) ---
 interface Env {
-  AI: any; 
-  WP_INDEX: VectorizeIndex; 
-  PLUGIN_STORAGE: R2Bucket;
+  AI: any; // Workers AI binding
+  WP_INDEX: VectorizeIndex; // Vectorize binding
+  PLUGIN_STORAGE: R2Bucket; // R2 binding
 }
 
 // --- WORKERS AI FREE LLM CONFIG ---
@@ -17,25 +15,23 @@ const GENERATION_MODEL = '@cf/meta/llama-3.1-8b-instruct';
 const EMBEDDING_MODEL = '@cf/baai/bge-small-en-v1.5';
 
 // --- Helper: Creates the ZIP file buffer ---
-// This requires the 'jszip' dependency
 async function createZipBuffer(fileName: string, content: string): Promise<ArrayBuffer> {
     const zip = new JSZip();
+    // Adds the core PHP file to the zip archive
     zip.file(fileName, content); 
     
     return zip.generateAsync({ type: "arraybuffer" });
 }
 
-// --- TEMPORARY INGESTION FUNCTION (Run once, then ignore) ---
-// This function needs to be executed once to populate your Vectorize index.
+// --- TEMPORARY INGESTION FUNCTION (Run once to setup RAG) ---
 async function ingestData(env: Env): Promise<Response> {
   const vectors = [];
   
   for (let i = 0; i < WP_DOCS.length; i++) {
     const chunk = WP_DOCS[i];
     
-    const embeddingResponse = await env.AI.run(EMBEDDING_MODEL, {
-      text: chunk
-    });
+    // 1. Generate Embedding using Workers AI (Free Tier)
+    const embeddingResponse = await env.AI.run(EMBEDDING_MODEL, { text: chunk });
     const embedding = embeddingResponse.data[0];
 
     vectors.push({
@@ -45,16 +41,16 @@ async function ingestData(env: Env): Promise<Response> {
     });
   }
 
-  // Insert into Vectorize Index 
+  // 2. Insert into Vectorize Index 
   await env.WP_INDEX.upsert(vectors);
 
   return new Response(JSON.stringify({ 
-      message: `Successfully ingested ${vectors.length} vectors into Vectorize. THIS FUNCTION IS FOR SETUP ONLY.` 
+      message: `Successfully ingested ${vectors.length} vectors into Vectorize. THIS IS SETUP ONLY.` 
   }), { status: 200 });
 }
 
 
-// --- MAIN API HANDLER (Used by your Frontend) ---
+// --- MAIN API HANDLER (For Frontend POST requests) ---
 async function handleGenerate(request: Request, env: Env): Promise<Response> {
     if (request.method !== 'POST') {
       return new Response(JSON.stringify({ error: "Method Not Allowed. Use POST." }), { status: 405 });
@@ -72,7 +68,7 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
       const context = searchResults.matches.map(match => match.metadata.text).join('\n---\n');
 
       // 2. Define System Prompt and Generate Code
-      const systemPrompt = `You are a world-class WordPress PHP developer. Your goal is to write a single, complete, secure PHP file for a plugin. Use the following CONTEXT: ${context}. Respond with ONLY the raw PHP code, starting with '<?php' and the required plugin header comment block.`;
+      const systemPrompt = `You are a world-class WordPress PHP developer. Your goal is to write a single, complete, secure PHP file for a plugin. Use the following CONTEXT: ${context}. Respond with ONLY the raw PHP code, starting with '<?php' and the required plugin header comment block. Do not include any explanation or markdown formatting.`;
 
       const aiResponse = await env.AI.run(GENERATION_MODEL, {
         messages: [
@@ -81,28 +77,31 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
         ]
       });
 
-      const generatedCode = aiResponse.response;
+      // Simple cleanup for the output code
+      let generatedCode = aiResponse.response.trim();
+      if (generatedCode.startsWith('```php')) {
+        generatedCode = generatedCode.replace('```php', '').replace('```', '').trim();
+      }
       
       if (!generatedCode || generatedCode.length < 50) {
         throw new Error("AI returned no code or an excessively short response.");
       }
 
-      // 3. Package and Store in R2 (local simulation)
+      // 3. Package and Store in R2 (Local Simulation)
       const sanitizedName = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').substring(0, 30);
       const zipFileName = `wp-plugin-${sanitizedName}.zip`;
+      const phpFileName = `${sanitizedName}.php`;
 
-      const zipBuffer = await createZipBuffer(`${sanitizedName}.php`, generatedCode);
-      
-      // Store in R2 (local R2 simulation during dev)
+      const zipBuffer = await createZipBuffer(phpFileName, generatedCode);
       await env.PLUGIN_STORAGE.put(zipFileName, zipBuffer); 
       
-      // Return URL for download (Frontend will use this link)
-      const downloadUrl = `http://localhost:8787/download/${zipFileName}`; 
+      // The download URL routes back to the Worker to fetch the file from R2
+      const downloadUrl = `/download/${zipFileName}`; 
 
       // 4. Return Success Response (Used by public/app.js)
       return new Response(JSON.stringify({ 
         success: true,
-        code: generatedCode, 
+        code: generatedCode, // Return code for display/debugging
         downloadUrl: downloadUrl,
       }), {
         headers: { 'Content-Type': 'application/json' },
@@ -128,7 +127,7 @@ export default {
       return ingestData(env);
     }
     
-    // 2. Download Route (R2 Retrieval) - SIMPLIFIED FOR MVP
+    // 2. Download Route (R2 Retrieval)
     if (url.pathname.startsWith('/download/')) {
         const fileName = url.pathname.substring('/download/'.length);
         const object = await env.PLUGIN_STORAGE.get(fileName);
@@ -146,7 +145,7 @@ export default {
     }
 
     // 3. Main API Route (Handles Frontend POST)
-    // Assumes the Worker is hosted at the root path, responding to POSTs
+    // If it's a request that isn't the two routes above, it's assumed to be the main API call.
     return handleGenerate(request, env);
   }
 };
