@@ -9,7 +9,7 @@
 <body>
     <div class="container">
         <h1>WordPress Plugin Generator AI 🤖</h1>
-        <p>Describe the plugin you need. Runs on Cloudflare Free Tier services (Workers AI, Vectorize, R2).</p>
+        <p>Describe the plugin you need. Runs on Cloudflare Free Tier (Workers AI, Vectorize).</p>
         
         <form id="generator-form">
             <textarea 
@@ -21,12 +21,12 @@
             <button type="submit" id="generate-button">Generate Plugin Code</button>
         </form>
 
-        <div id="status-message" class="status"></div>
+        <div id="status-message" class="status">Awaiting input. Remember to run /ingest first.</div>
         
         <div id="result-area">
             <h3>Generated Code:</h3>
             
-            <a id="download-link" style="display:none;" target="_blank" download="custom-plugin.zip">
+            <a id="download-link" href="#" style="display:none;" target="_blank" download="custom-plugin.zip">
                 <button>Download Plugin ZIP</button>
             </a>
             
