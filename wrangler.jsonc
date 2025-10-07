@@ -1,7 +1,10 @@
+
+
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "wp-ai-generator",
 	"main": "src/index.ts",
+	"type": "module",  // <-- ADD THIS LINE
 	"compatibility_date": "2025-10-07", // Updated to reflect current date best practice
 	"observability": {
 		"enabled": true
