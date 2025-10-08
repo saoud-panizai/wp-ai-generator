@@ -60,23 +60,6 @@ export function generatePlaygroundBlueprint(
         options: {
           activate: true
         }
-      },
-      
-      // Step 3: Set site title
-      {
-        step: "setSiteOptions",
-        options: {
-          blogname: `Testing: ${pluginName}`
-        }
-      },
-      
-      // Step 4: Navigate to plugins page to show activation
-      {
-        step: "runPHP",
-        code: `<?php
-// Set a welcome message
-set_transient('${pluginSlug}_welcome', 'Plugin installed and activated successfully!', 300);
-?>`
       }
     ]
   };

@@ -326,6 +326,18 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    // Handle CORS preflight
+    if (request.method === 'OPTIONS') {
+      return new Response(null, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, HEAD, OPTIONS',
+          'Access-Control-Allow-Headers': '*',
+          'Access-Control-Max-Age': '86400',
+        }
+      });
+    }
+
     // 1. Ingestion Route (SETUP ONLY)
     if (url.pathname === '/ingest' && request.method === 'GET') {
       return ingestData(env);
@@ -358,7 +370,10 @@ export default {
             headers: {
                 'Content-Type': contentType,
                 'Content-Disposition': disposition,
-                'Access-Control-Allow-Origin': '*' // Allow Playground to fetch blueprint
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+                'Access-Control-Allow-Headers': '*',
+                'Cache-Control': 'public, max-age=3600'
             }
         });
     }
