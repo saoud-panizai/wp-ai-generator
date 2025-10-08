@@ -7,6 +7,12 @@ import {
   generatePlaygroundBlueprint, 
   generatePlaygroundUrlFromHosted 
 } from './blueprintGenerator';
+import {
+  generateWithAutoMode,
+  generateWithProvider,
+  cleanGeneratedCode,
+  LLM_PROVIDERS
+} from './llmProviders';
 
 // --- BINDING INTERFACE (Matches your wrangler.jsonc bindings) ---
 interface Env {
@@ -15,6 +21,7 @@ interface Env {
   PLUGIN_STORAGE: R2Bucket; 
   ASSETS: { fetch: (request: Request) => Promise<Response> }; 
   GOOGLE_API_KEY: string; // Google Gemini API Key (stored as secret)
+  GROQ_API_KEY?: string; // Groq API Key (optional, stored as secret)
 }
 
 // --- AI MODEL CONFIG ---
@@ -82,12 +89,15 @@ async function handleGenerate(request: Request, env: Env): Promise<Response> {
     }
     
     try {
-      const body = await request.json() as { prompt?: string };
+      const body = await request.json() as { prompt?: string; model?: string };
       const prompt = body.prompt;
+      const selectedModel = body.model || 'auto'; // Default to auto mode
 
       if (!prompt) {
         return new Response(JSON.stringify({ error: "Missing 'prompt' in request body." }), { status: 400 });
       }
+      
+      console.log(`🎯 Generating plugin with model: ${selectedModel}`);
 
       // 1. RAG Retrieval (Context Lookup)
       const queryEmbeddingResponse = await env.AI.run(EMBEDDING_MODEL, { text: prompt });
@@ -212,42 +222,27 @@ FINAL CHECKLIST:
 OUTPUT FORMAT:
 Respond with ONLY the raw PHP code. No explanations before or after. No markdown formatting. No code blocks. Just pure, complete, working PHP code starting with <?php.`;
 
-      // Call Google Gemini API
-      const geminiResponse = await fetch(GEMINI_API_URL + '?key=' + env.GOOGLE_API_KEY, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{
-            parts: [{ text: fullPrompt }]
-          }]
-        })
-      });
-
-      if (!geminiResponse.ok) {
-        const errorText = await geminiResponse.text();
-        console.error("Gemini API error:", errorText);
-        throw new Error(`Gemini API returned status ${geminiResponse.status}`);
-      }
-
-      const geminiData = await geminiResponse.json() as any;
+      // 2. Generate code with selected LLM provider
+      let generatedCode: string;
+      let modelUsed: string = selectedModel;
       
-      // Extract generated text from Gemini response
-      if (!geminiData.candidates || !geminiData.candidates[0]?.content?.parts?.[0]?.text) {
-        console.error("Gemini response structure invalid:", JSON.stringify(geminiData));
-        throw new Error("Gemini returned an invalid response structure.");
+      if (selectedModel === 'auto') {
+        // Auto mode: Try providers in order
+        const result = await generateWithAutoMode(fullPrompt, env);
+        generatedCode = result.code;
+        modelUsed = result.modelUsed;
+        console.log(`✅ Auto mode succeeded with: ${modelUsed}`);
+      } else {
+        // Specific provider selected
+        generatedCode = await generateWithProvider(selectedModel, fullPrompt, env);
+        console.log(`✅ Generated with: ${selectedModel}`);
       }
-
-      let generatedCode = geminiData.candidates[0].content.parts[0].text.trim();
       
-      // Cleanup markdown code blocks if present
-      if (generatedCode.startsWith('```php')) {
-        generatedCode = generatedCode.replace(/```php\s*/, '').replace(/```\s*$/, '').trim();
-      } else if (generatedCode.startsWith('```')) {
-        generatedCode = generatedCode.replace(/```\s*/, '').replace(/```\s*$/, '').trim();
-      }
+      // Clean up markdown code blocks
+      generatedCode = cleanGeneratedCode(generatedCode);
       
       if (generatedCode.length < 50) {
-        throw new Error("Gemini returned code that was too short or non-existent.");
+        throw new Error("Generated code is too short or empty.");
       }
 
       // 3. Generate Complete Plugin Structure (multi-file)
@@ -299,6 +294,7 @@ Respond with ONLY the raw PHP code. No explanations before or after. No markdown
         success: true,
         pluginName: pluginStructure.pluginName,
         pluginSlug: pluginStructure.pluginSlug,
+        modelUsed: modelUsed, // Include which model was used
         files: pluginStructure.files.map(f => ({
           path: f.path,
           content: f.content,
@@ -343,12 +339,34 @@ export default {
       return ingestData(env);
     }
     
-    // 2. API Generation Route (Handles Frontend POST)
+    // 2. Get Available Models Route
+    if (url.pathname === '/api/models' && request.method === 'GET') {
+      const models = Object.entries(LLM_PROVIDERS).map(([id, provider]) => ({
+        id,
+        name: provider.name,
+        description: provider.description,
+        isFree: provider.isFree,
+        requiresApiKey: provider.requiresApiKey
+      }));
+      
+      return new Response(JSON.stringify({ 
+        models,
+        auto: {
+          id: 'auto',
+          name: 'Auto (Best Available)',
+          description: 'Automatically selects the best working model',
+          isFree: true,
+          requiresApiKey: false
+        }
+      }), { headers: { 'Content-Type': 'application/json' } });
+    }
+    
+    // 3. API Generation Route (Handles Frontend POST)
     if (url.pathname === '/api/generate' && request.method === 'POST') {
       return handleGenerate(request, env);
     }
     
-    // 3. Download Route (R2 Retrieval)
+    // 4. Download Route (R2 Retrieval)
     if (url.pathname.startsWith('/download/')) {
         const fileName = url.pathname.substring('/download/'.length);
         const object = await env.PLUGIN_STORAGE.get(fileName);
@@ -378,7 +396,7 @@ export default {
         });
     }
     
-    // 4. WordPress Playground Launcher Route
+    // 5. WordPress Playground Launcher Route
     if (url.pathname.startsWith('/playground/')) {
         const pluginSlug = url.pathname.substring('/playground/'.length);
         const blueprintFileName = `${pluginSlug}-blueprint.json`;
@@ -400,7 +418,7 @@ export default {
         return Response.redirect(playgroundUrl, 302);
     }
 
-    // 5. Static Asset/Page Request (Serve the HTML/CSS/JS)
+    // 6. Static Asset/Page Request (Serve the HTML/CSS/JS)
     return env.ASSETS.fetch(request);
   }
 };

@@ -6,6 +6,8 @@ const WORKER_URL = window.location.origin + '/';
 // DOM Elements
 const form = document.getElementById('generator-form');
 const promptInput = document.getElementById('prompt-input');
+const modelSelect = document.getElementById('model-select');
+const modelDescription = document.getElementById('model-description');
 const statusMessage = document.getElementById('status-message');
 const generateButton = document.getElementById('generate-button');
 const loadingOverlay = document.getElementById('loading-overlay');
@@ -14,6 +16,7 @@ const codePreview = document.getElementById('code-preview');
 const currentFileName = document.getElementById('current-file-name');
 const pluginInfo = document.getElementById('plugin-info');
 const pluginNameDisplay = document.getElementById('plugin-name-display');
+const modelUsedDisplay = document.getElementById('model-used-display');
 const downloadLink = document.getElementById('download-link');
 const playgroundLink = document.getElementById('playground-link');
 const copyFileBtn = document.getElementById('copy-file-btn');
@@ -24,10 +27,19 @@ const collapseAllBtn = document.getElementById('collapse-all-btn');
 // State
 let currentPlugin = null;
 let currentFileContent = null;
+let availableModels = {};
 
 // Initialize
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadAvailableModels();
+});
+
 if (form) {
     form.addEventListener('submit', handleGenerate);
+}
+
+if (modelSelect) {
+    modelSelect.addEventListener('change', handleModelChange);
 }
 
 if (copyFileBtn) {
@@ -46,11 +58,51 @@ if (collapseAllBtn) {
     collapseAllBtn.addEventListener('click', () => toggleAllFolders(false));
 }
 
+// Load available models from API
+async function loadAvailableModels() {
+    try {
+        const response = await fetch(WORKER_URL + 'api/models');
+        const data = await response.json();
+        
+        availableModels = data;
+        
+        // Populate model dropdown
+        if (modelSelect) {
+            // Clear existing options except Auto
+            modelSelect.innerHTML = '<option value="auto" selected>🚀 Auto (Best Available)</option>';
+            
+            // Add all models
+            data.models.forEach(model => {
+                const option = document.createElement('option');
+                option.value = model.id;
+                const freeTag = model.isFree ? '✨ FREE' : '💰 PAID';
+                option.textContent = `${model.name} (${freeTag})`;
+                option.dataset.description = model.description;
+                modelSelect.appendChild(option);
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load models:', error);
+    }
+}
+
+// Handle model selection change
+function handleModelChange(event) {
+    const selectedOption = event.target.selectedOptions[0];
+    const description = selectedOption.dataset.description || 'Automatically selects the best working model';
+    
+    if (modelDescription) {
+        modelDescription.textContent = description;
+    }
+}
+
 // Main generation handler
 async function handleGenerate(event) {
     event.preventDefault();
     
     const prompt = promptInput.value.trim();
+    const selectedModel = modelSelect ? modelSelect.value : 'auto';
+    
     if (!prompt) {
         showStatus('error', 'Please describe your plugin');
         return;
@@ -58,7 +110,8 @@ async function handleGenerate(event) {
 
     // Show loading state
     showLoading(true);
-    showStatus('loading', 'Generating your WordPress plugin...');
+    const modelName = modelSelect ? modelSelect.selectedOptions[0].textContent : 'Auto';
+    showStatus('loading', `Generating with ${modelName}...`);
     generateButton.disabled = true;
     pluginInfo.style.display = 'none';
     
@@ -70,7 +123,10 @@ async function handleGenerate(event) {
         const response = await fetch(WORKER_URL + 'api/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ prompt: prompt }),
+            body: JSON.stringify({ 
+                prompt: prompt,
+                model: selectedModel
+            }),
         });
 
         const data = await response.json();
@@ -106,6 +162,14 @@ async function handleGenerate(event) {
 // Display plugin information
 function displayPluginInfo(data) {
     pluginNameDisplay.textContent = data.pluginName || 'Generated Plugin';
+    
+    // Display which model was used
+    if (data.modelUsed && modelUsedDisplay) {
+        const modelInfo = availableModels.models?.find(m => m.id === data.modelUsed);
+        const modelName = modelInfo ? modelInfo.name : data.modelUsed;
+        modelUsedDisplay.textContent = `✨ Generated with: ${modelName}`;
+    }
+    
     downloadLink.href = data.downloadUrl;
     downloadLink.download = `${data.pluginSlug}.zip`;
     playgroundLink.href = data.playgroundUrl;
