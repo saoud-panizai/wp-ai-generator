@@ -53,7 +53,7 @@ export function generatePlaygroundBlueprint(
       // Step 2: Install plugin from URL
       {
         step: "installPlugin",
-        pluginZipFile: {
+        pluginData: {
           resource: "url",
           url: pluginZipUrl
         },
@@ -158,7 +158,7 @@ export function generateQuickTestBlueprint(pluginZipUrl: string): PlaygroundBlue
       },
       {
         step: "installPlugin",
-        pluginZipFile: {
+        pluginData: {
           resource: "url",
           url: pluginZipUrl
         },
