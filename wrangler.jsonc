@@ -4,8 +4,7 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "wp-ai-generator",
 	"main": "src/index.ts",
-	"type": "module",  // <-- ADD THIS LINE
-	"compatibility_date": "2025-10-07", // Updated to reflect current date best practice
+	"compatibility_date": "2025-10-07",
 	"observability": {
 		"enabled": true
 	},
@@ -22,7 +21,8 @@
 	"r2_buckets": [
 		{
 			"bucket_name": "plugin-zip-storage",
-			"binding": "PLUGIN_STORAGE"
+			"binding": "PLUGIN_STORAGE",
+			"preview_bucket_name": "plugin-zip-storage-preview"
 		}
 	],
 	

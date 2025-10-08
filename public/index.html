@@ -3,37 +3,134 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WP Plugin AI Generator MVP</title>
+    <title>WordPress Plugin Generator - AI Powered</title>
     <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
 </head>
 <body>
-    <div class="container">
-        <h1>WordPress Plugin Generator AI 🤖</h1>
-        <p>Describe the plugin you need. Runs on Cloudflare Free Tier (Workers AI, Vectorize).</p>
-        
-        <form id="generator-form">
-            <textarea 
-                id="prompt-input"
-                placeholder="E.g., Create a secure WooCommerce add-on that restricts product purchases to users in the 'Wholesale' role."
-                rows="6"
-                required
-            ></textarea>
-            <button type="submit" id="generate-button">Generate Plugin Code</button>
-        </form>
+    <div class="app-container">
+        <!-- Header -->
+        <header class="app-header">
+            <div class="header-content">
+                <h1>⚡ WordPress Plugin Generator</h1>
+                <p class="subtitle">AI-Powered • Best Practices • Instant Playground Testing</p>
+            </div>
+        </header>
 
-        <div id="status-message" class="status">Awaiting input. Remember to run /ingest first.</div>
-        
-        <div id="result-area">
-            <h3>Generated Code:</h3>
-            
-            <a id="download-link" href="#" style="display:none;" target="_blank" download="custom-plugin.zip">
-                <button>Download Plugin ZIP</button>
-            </a>
-            
-            <pre id="code-output" style="display:none;"></pre>
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Left Panel: Generation Form -->
+            <section class="generator-panel">
+                <div class="panel-header">
+                    <h2>🎯 Describe Your Plugin</h2>
+                </div>
+                
+                <form id="generator-form" class="generator-form">
+                    <div class="form-group">
+                        <label for="prompt-input">What should your plugin do?</label>
+                        <textarea 
+                            id="prompt-input"
+                            class="prompt-textarea"
+                            placeholder="Example: Create a WooCommerce extension that sends SMS notifications when orders are placed. Include admin settings for API credentials and message templates."
+                            rows="8"
+                            required
+                        ></textarea>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" id="generate-button" class="btn btn-primary">
+                            <span class="btn-icon">🤖</span>
+                            Generate Plugin
+                        </button>
+                    </div>
+                </form>
+
+                <div id="status-message" class="status-message">
+                    <div class="status-icon">💡</div>
+                    <div class="status-text">Ready to generate your WordPress plugin!</div>
+                </div>
+
+                <!-- Plugin Info (shows after generation) -->
+                <div id="plugin-info" class="plugin-info" style="display: none;">
+                    <h3 id="plugin-name-display">Plugin Name</h3>
+                    <div class="plugin-actions">
+                        <a id="download-link" href="#" class="btn btn-success" download>
+                            <span class="btn-icon">📦</span>
+                            Download ZIP
+                        </a>
+                        <a id="playground-link" href="#" target="_blank" class="btn btn-playground">
+                            <span class="btn-icon">🎮</span>
+                            Test in Playground
+                        </a>
+                        <button id="copy-all-btn" class="btn btn-secondary">
+                            <span class="btn-icon">📋</span>
+                            Copy All Code
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Panel: File Explorer and Code Preview -->
+            <section class="preview-panel" id="preview-panel">
+                <div class="panel-header">
+                    <h2>📁 Plugin Structure</h2>
+                    <div class="panel-header-actions">
+                        <button id="expand-all-btn" class="btn-icon-only" title="Expand All">
+                            ➕
+                        </button>
+                        <button id="collapse-all-btn" class="btn-icon-only" title="Collapse All">
+                            ➖
+                        </button>
+                    </div>
+                </div>
+
+                <!-- File Tree -->
+                <div class="file-explorer" id="file-explorer">
+                    <div class="empty-state">
+                        <div class="empty-icon">📂</div>
+                        <p>Generate a plugin to see the file structure</p>
+                    </div>
+                </div>
+
+                <!-- Code Preview -->
+                <div class="code-preview-container">
+                    <div class="code-preview-header">
+                        <span id="current-file-name" class="current-file-name">No file selected</span>
+                        <div class="code-actions">
+                            <button id="copy-file-btn" class="btn-icon-only" title="Copy File Content" style="display: none;">
+                                📋
+                            </button>
+                        </div>
+                    </div>
+                    <div class="code-preview" id="code-preview">
+                        <div class="empty-state">
+                            <div class="empty-icon">👨‍💻</div>
+                            <p>Click on a file to view its content</p>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- Footer -->
+        <footer class="app-footer">
+            <p>Powered by Cloudflare Workers AI + Google Gemini • Following <a href="https://developer.wordpress.org/plugins/" target="_blank">WordPress Best Practices</a></p>
+        </footer>
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="loading-overlay" style="display: none;">
+        <div class="loading-content">
+            <div class="spinner"></div>
+            <p class="loading-text">Generating your WordPress plugin...</p>
+            <p class="loading-subtext">This may take 10-30 seconds</p>
         </div>
     </div>
 
-    <script src="app.js"></script> 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/php.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/javascript.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/css.min.js"></script>
+    <script src="app.js"></script>
 </body>
 </html>
