@@ -22,6 +22,7 @@ interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> }; 
   GOOGLE_API_KEY: string; // Google Gemini API Key (stored as secret)
   GROQ_API_KEY?: string; // Groq API Key (optional, stored as secret)
+  OPENROUTER_API_KEY?: string; // OpenRouter API Key for Qwen3 Coder (optional, stored as secret)
 }
 
 // --- AI MODEL CONFIG ---
@@ -225,17 +226,30 @@ Respond with ONLY the raw PHP code. No explanations before or after. No markdown
       // 2. Generate code with selected LLM provider
       let generatedCode: string;
       let modelUsed: string = selectedModel;
+      let tokensUsed: number | undefined;
+      let tokensRemaining: number | undefined;
       
       if (selectedModel === 'auto') {
         // Auto mode: Try providers in order
         const result = await generateWithAutoMode(fullPrompt, env);
         generatedCode = result.code;
         modelUsed = result.modelUsed;
+        tokensUsed = result.tokensUsed;
+        tokensRemaining = result.tokensRemaining;
         console.log(`✅ Auto mode succeeded with: ${modelUsed}`);
+        if (tokensUsed) {
+          console.log(`📊 Tokens used: ${tokensUsed.toLocaleString()}`);
+        }
       } else {
         // Specific provider selected
-        generatedCode = await generateWithProvider(selectedModel, fullPrompt, env);
+        const result = await generateWithProvider(selectedModel, fullPrompt, env);
+        generatedCode = result.code;
+        tokensUsed = result.tokensUsed;
+        tokensRemaining = result.tokensRemaining;
         console.log(`✅ Generated with: ${selectedModel}`);
+        if (tokensUsed) {
+          console.log(`📊 Tokens used: ${tokensUsed.toLocaleString()}`);
+        }
       }
       
       // Clean up markdown code blocks
@@ -289,12 +303,14 @@ Respond with ONLY the raw PHP code. No explanations before or after. No markdown
       const blueprintUrl = `${workerUrl}/download/${blueprintFileName}`;
       const playgroundUrl = generatePlaygroundUrlFromHosted(blueprintUrl);
 
-      // 6. Return Success Response with file structure
+      // 6. Return Success Response with file structure and token usage
       return new Response(JSON.stringify({ 
         success: true,
         pluginName: pluginStructure.pluginName,
         pluginSlug: pluginStructure.pluginSlug,
         modelUsed: modelUsed, // Include which model was used
+        tokensUsed: tokensUsed, // Token usage (if available)
+        tokensRemaining: tokensRemaining, // Remaining tokens (if available)
         files: pluginStructure.files.map(f => ({
           path: f.path,
           content: f.content,

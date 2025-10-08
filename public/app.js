@@ -17,6 +17,9 @@ const currentFileName = document.getElementById('current-file-name');
 const pluginInfo = document.getElementById('plugin-info');
 const pluginNameDisplay = document.getElementById('plugin-name-display');
 const modelUsedDisplay = document.getElementById('model-used-display');
+const tokenUsageDisplay = document.getElementById('token-usage-display');
+const tokensUsedElement = document.getElementById('tokens-used');
+const tokensRemainingElement = document.getElementById('tokens-remaining');
 const downloadLink = document.getElementById('download-link');
 const playgroundLink = document.getElementById('playground-link');
 const copyFileBtn = document.getElementById('copy-file-btn');
@@ -168,6 +171,21 @@ function displayPluginInfo(data) {
         const modelInfo = availableModels.models?.find(m => m.id === data.modelUsed);
         const modelName = modelInfo ? modelInfo.name : data.modelUsed;
         modelUsedDisplay.textContent = `✨ Generated with: ${modelName}`;
+    }
+    
+    // Display token usage (if available)
+    if (data.tokensUsed && tokenUsageDisplay) {
+        tokensUsedElement.textContent = data.tokensUsed.toLocaleString();
+        
+        if (data.tokensRemaining) {
+            tokensRemainingElement.textContent = data.tokensRemaining.toLocaleString();
+        }
+        
+        tokenUsageDisplay.style.display = 'block';
+    } else {
+        if (tokenUsageDisplay) {
+            tokenUsageDisplay.style.display = 'none';
+        }
     }
     
     downloadLink.href = data.downloadUrl;

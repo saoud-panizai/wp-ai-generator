@@ -7,8 +7,70 @@ export interface LLMProvider {
   isFree: boolean;
   requiresApiKey: boolean;
   maxTokens: number;
-  generate: (prompt: string, apiKey?: string, env?: any) => Promise<string>;
+  generate: (prompt: string, apiKey?: string, env?: any) => Promise<GenerationResult>;
 }
+
+export interface GenerationResult {
+  code: string;
+  tokensUsed?: number;
+  tokensRemaining?: number;
+  model?: string;
+}
+
+// OpenRouter - Qwen3 Coder (FREE - specialized for coding!)
+export const OpenRouterQwen3: LLMProvider = {
+  id: 'openrouter-qwen3-coder',
+  name: 'Qwen3 Coder (FREE)',
+  description: 'Code-specialized model, 1M free tokens/day, excellent for WordPress',
+  isFree: true,
+  requiresApiKey: true,
+  maxTokens: 8192,
+  
+  async generate(prompt: string, apiKey?: string, env?: any): Promise<GenerationResult> {
+    const key = apiKey || env?.OPENROUTER_API_KEY;
+    if (!key) {
+      throw new Error('OpenRouter API key not configured');
+    }
+    
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${key}`,
+        'HTTP-Referer': 'https://wp-ai-generator.saoud-panizai.workers.dev',
+        'X-Title': 'WordPress Plugin Generator'
+      },
+      body: JSON.stringify({
+        model: 'qwen/qwen3-coder:free',
+        messages: [
+          { role: 'system', content: 'You are a world-class WordPress PHP developer specialized in creating secure, production-ready plugins.' },
+          { role: 'user', content: prompt }
+        ],
+        max_tokens: 8192,
+        temperature: 0.7
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`OpenRouter API error: ${response.status} - ${errorText}`);
+    }
+
+    const data = await response.json() as any;
+    
+    // Extract token usage from OpenRouter response
+    const tokensUsed = data.usage?.total_tokens || 0;
+    const dailyLimit = 1000000; // 1M tokens per day
+    const tokensRemaining = dailyLimit - tokensUsed;
+    
+    return {
+      code: data.choices?.[0]?.message?.content || '',
+      tokensUsed,
+      tokensRemaining,
+      model: data.model || 'qwen3-coder'
+    };
+  }
+};
 
 // Cloudflare Workers AI Provider (FREE - no API key needed)
 export const CloudflareWorkersAI: LLMProvider = {
@@ -19,7 +81,7 @@ export const CloudflareWorkersAI: LLMProvider = {
   requiresApiKey: false,
   maxTokens: 4096,
   
-  async generate(prompt: string, apiKey?: string, env?: any): Promise<string> {
+  async generate(prompt: string, apiKey?: string, env?: any): Promise<GenerationResult> {
     if (!env?.AI) {
       throw new Error('Workers AI binding not available');
     }
@@ -33,7 +95,9 @@ export const CloudflareWorkersAI: LLMProvider = {
       temperature: 0.7
     });
     
-    return response.response || response.text || '';
+    return {
+      code: response.response || response.text || ''
+    };
   }
 };
 
@@ -46,7 +110,7 @@ export const CloudflareMistral: LLMProvider = {
   requiresApiKey: false,
   maxTokens: 4096,
   
-  async generate(prompt: string, apiKey?: string, env?: any): Promise<string> {
+  async generate(prompt: string, apiKey?: string, env?: any): Promise<GenerationResult> {
     if (!env?.AI) {
       throw new Error('Workers AI binding not available');
     }
@@ -60,7 +124,9 @@ export const CloudflareMistral: LLMProvider = {
       temperature: 0.7
     });
     
-    return response.response || response.text || '';
+    return {
+      code: response.response || response.text || ''
+    };
   }
 };
 
@@ -73,7 +139,7 @@ export const GoogleGemini: LLMProvider = {
   requiresApiKey: true,
   maxTokens: 8192,
   
-  async generate(prompt: string, apiKey?: string, env?: any): Promise<string> {
+  async generate(prompt: string, apiKey?: string, env?: any): Promise<GenerationResult> {
     const key = apiKey || env?.GOOGLE_API_KEY;
     if (!key) {
       throw new Error('Google Gemini API key not configured');
@@ -101,7 +167,10 @@ export const GoogleGemini: LLMProvider = {
       throw new Error('Gemini returned invalid response structure');
     }
 
-    return data.candidates[0].content.parts[0].text.trim();
+    // Gemini doesn't provide token counts in the response for free tier
+    return {
+      code: data.candidates[0].content.parts[0].text.trim()
+    };
   }
 };
 
@@ -114,7 +183,7 @@ export const GroqLlama: LLMProvider = {
   requiresApiKey: true,
   maxTokens: 8000,
   
-  async generate(prompt: string, apiKey?: string, env?: any): Promise<string> {
+  async generate(prompt: string, apiKey?: string, env?: any): Promise<GenerationResult> {
     const key = apiKey || env?.GROQ_API_KEY;
     if (!key) {
       throw new Error('Groq API key not configured');
@@ -142,7 +211,14 @@ export const GroqLlama: LLMProvider = {
     }
 
     const data = await response.json() as any;
-    return data.choices?.[0]?.message?.content || '';
+    
+    // Groq provides token usage
+    const tokensUsed = data.usage?.total_tokens || 0;
+    
+    return {
+      code: data.choices?.[0]?.message?.content || '',
+      tokensUsed
+    };
   }
 };
 
@@ -155,7 +231,7 @@ export const GroqMixtral: LLMProvider = {
   requiresApiKey: true,
   maxTokens: 32768,
   
-  async generate(prompt: string, apiKey?: string, env?: any): Promise<string> {
+  async generate(prompt: string, apiKey?: string, env?: any): Promise<GenerationResult> {
     const key = apiKey || env?.GROQ_API_KEY;
     if (!key) {
       throw new Error('Groq API key not configured');
@@ -183,12 +259,20 @@ export const GroqMixtral: LLMProvider = {
     }
 
     const data = await response.json() as any;
-    return data.choices?.[0]?.message?.content || '';
+    
+    // Groq provides token usage
+    const tokensUsed = data.usage?.total_tokens || 0;
+    
+    return {
+      code: data.choices?.[0]?.message?.content || '',
+      tokensUsed
+    };
   }
 };
 
 // All available providers
 export const LLM_PROVIDERS: Record<string, LLMProvider> = {
+  'openrouter-qwen3-coder': OpenRouterQwen3, // NEW! Code-specialized
   'gemini-2.0-flash': GoogleGemini,
   'groq-llama-3.3': GroqLlama,
   'groq-mixtral': GroqMixtral,
@@ -200,10 +284,11 @@ export const LLM_PROVIDERS: Record<string, LLMProvider> = {
 export async function generateWithAutoMode(
   prompt: string,
   env: any
-): Promise<{ code: string; modelUsed: string }> {
+): Promise<{ code: string; modelUsed: string; tokensUsed?: number; tokensRemaining?: number }> {
   
-  // Priority order: fastest/best first
+  // Priority order: fastest/best first (Qwen3 Coder first - specialized for code!)
   const providers = [
+    { id: 'openrouter-qwen3-coder', provider: OpenRouterQwen3 },
     { id: 'gemini-2.0-flash', provider: GoogleGemini },
     { id: 'groq-llama-3.3', provider: GroqLlama },
     { id: 'groq-mixtral', provider: GroqMixtral },
@@ -216,11 +301,16 @@ export async function generateWithAutoMode(
   for (const { id, provider } of providers) {
     try {
       console.log(`Attempting to generate with: ${provider.name}`);
-      const code = await provider.generate(prompt, undefined, env);
+      const result = await provider.generate(prompt, undefined, env);
       
-      if (code && code.length > 50) {
+      if (result.code && result.code.length > 50) {
         console.log(`✅ Success with: ${provider.name}`);
-        return { code, modelUsed: id };
+        return { 
+          code: result.code, 
+          modelUsed: id,
+          tokensUsed: result.tokensUsed,
+          tokensRemaining: result.tokensRemaining
+        };
       }
     } catch (error: any) {
       console.log(`❌ Failed with ${provider.name}: ${error.message}`);
@@ -237,7 +327,7 @@ export async function generateWithProvider(
   providerId: string,
   prompt: string,
   env: any
-): Promise<string> {
+): Promise<GenerationResult> {
   const provider = LLM_PROVIDERS[providerId];
   
   if (!provider) {
