@@ -286,9 +286,11 @@ export async function generateWithAutoMode(
   env: any
 ): Promise<{ code: string; modelUsed: string; tokensUsed?: number; tokensRemaining?: number }> {
   
-  // Priority order: fastest/best first (Qwen3 Coder first - specialized for code!)
+  // Priority order: fastest/best first
+  // Note: Qwen3 removed from auto-priority due to API key issues
+  // Add back when valid OpenRouter key is configured
   const providers = [
-    { id: 'openrouter-qwen3-coder', provider: OpenRouterQwen3 },
+    // { id: 'openrouter-qwen3-coder', provider: OpenRouterQwen3 }, // Disabled - invalid API key
     { id: 'gemini-2.0-flash', provider: GoogleGemini },
     { id: 'groq-llama-3.3', provider: GroqLlama },
     { id: 'groq-mixtral', provider: GroqMixtral },
