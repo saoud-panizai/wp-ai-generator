@@ -165,3 +165,11 @@ dist
 .env*
 !.env.example
 .wrangler/
+
+# Security: API Keys and Secrets
+**/test-*.js
+**/*-test.js
+**/secrets.json
+**/api-keys.txt
+**/*.key
+**/*.secret
